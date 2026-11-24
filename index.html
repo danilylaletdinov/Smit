@@ -106,14 +106,14 @@
       <section class="card">
         <h2>Вентилятор (по полному расходу через двигатель)</h2>
         <div id="fanBox"></div>
-        <p class="note" style="margin-top:8px">Расход через вентилятор считается как $G_{в} = G_{\mathrm{полн}} \cdot (1 + m)$, где $m$ — степень двухконтурности, $G_{\mathrm{полн}}$ — полный расход воздуха через двигатель. Втулочное отношение $d$ задаётся в группе «Вентилятор».</p>
+        <p class="note" style="margin-top:8px">Через вентилятор проходит <strong>весь</strong> расход воздуха, поэтому $G_{в} = G_{\mathrm{полн}}$. Расход через внутренний контур: $G_{\mathrm{внутр}} = G_{\mathrm{полн}} / (1 + m)$. Плотность на входе в вентилятор $\rho_{в}$ задаётся отдельно (на взлёте у земли ≈ 1,2 кг/м³; на крейсерском режиме ≈ 0,36–0,40). Втулочное отношение $d$ — в группе «Вентилятор».</p>
         <div id="stepsFan"></div>
       </section>
 
       <section class="card">
         <h2>Допустимые напряжения от температуры</h2>
         <div class="chart small"><canvas id="chartSigma"></canvas></div>
-        <p class="note" style="margin-top:8px"><strong>Внимание:</strong> кривые заданы ориентировочно. Замените точки в коде на данные из вашей методички / справочника (Анурьев, т. 2, или аналоги). Красная точка — ваш расчётный режим: по оси X — температура металла, по оси Y — фактическое напряжение $\sigma = \rho u_{пер}^2$.</p>
+        <p class="note" style="margin-top:8px"><strong>Внимание:</strong> кривые заданы ориентировочно. Замените точки в коде на данные из вашей методички / справочника (Анурьев, т. 2, или аналоги). Точки расчётного режима: КНД — по $T_{мет,КНД}$, ТНД — по $T_{мет,ТНД}$; по оси Y — фактическое напряжение $\sigma = \rho u_{пер}^2$.</p>
       </section>
 
       <section class="card">
@@ -142,13 +142,15 @@
       </section>
 
       <section class="card">
-        <h2>Диаграмма Смита — компрессор (КНД)</h2>
+        <h2>Диаграмма Смита — компрессор (КНД, не вентилятор)</h2>
+        <p class="note" style="margin:0 0 8px">Относится к <strong>средней ступени КНД</strong>. Вентилятор на этой диаграмме не показан — он считается отдельно. Изолинии — уровни КПД по модели Смита; максимум $\eta_{max}=0{,}92$ достигается в одной точке $(\varphi_{opt},\,\psi_H)$, поэтому <strong>контура 0,92 нет</strong> — показан маркером.</p>
         <div class="chart"><canvas id="chartComp"></canvas></div>
         <p id="infoComp" class="info"></p>
       </section>
 
       <section class="card">
         <h2>Диаграмма Смита — турбина (ТНД)</h2>
+        <p class="note" style="margin:0 0 8px">Относится к <strong>средней ступени ТНД</strong>. Изолинии — уровни КПД по модели Смита; максимум $\eta_{max}=0{,}93$ показан маркером в вершине.</p>
         <div class="chart"><canvas id="chartTurb"></canvas></div>
         <p id="infoTurb" class="info"></p>
       </section>
@@ -230,7 +232,8 @@ const GROUPS = [
   ['Вентилятор (геометрия по полному расходу)', [
     ['G_total', 'Полный расход через двигатель, кг/с', 500],
     ['m_bypass', 'Степень двухконтурности m', 7.7],
-    ['d_fan', 'Относительный диаметр втулки d', 0.35]
+    ['d_fan', 'Относительный диаметр втулки d', 0.35],
+    ['rho_fan', 'Плотность воздуха на входе в вентилятор, кг/м³', 1.2]
   ]],
   ['Прочность материалов', [
     ['c_rho_mat', 'Плотность материала КНД (титан), кг/м³', 4500],
@@ -273,14 +276,14 @@ const COMP_MODEL = {
   phiOpt: 0.60, sigPhi: 0.25, sigPsi: 0.30,
   etaMax: 0.92, k: 0.35,
   psiH: (phi) => 0.42 - 0.30 * (phi - 0.60) + 0.50 * (phi - 0.60) ** 2,
-  levels: [0.60, 0.65, 0.70, 0.75, 0.78, 0.80, 0.82, 0.84, 0.86, 0.88, 0.90]
+  levels: [0.60, 0.65, 0.70, 0.75, 0.78, 0.80, 0.82, 0.84, 0.86, 0.88, 0.90, 0.91]
 };
 
 const TURB_MODEL = {
   phiOpt: 0.65, sigPhi: 0.35, sigPsi: 0.60,
   etaMax: 0.93, k: 0.30,
   psiH: (phi) => 1.05 + 1.00 * (phi - 0.65) + 0.30 * (phi - 0.65) ** 2,
-  levels: [0.60, 0.65, 0.70, 0.75, 0.78, 0.80, 0.82, 0.84, 0.86, 0.88, 0.90]
+  levels: [0.60, 0.65, 0.70, 0.75, 0.78, 0.80, 0.82, 0.84, 0.86, 0.88, 0.90, 0.91, 0.92]
 };
 
 function etaComp(phi, psi) {
@@ -352,11 +355,11 @@ const smithPlugin = {
       if (A <= 0) return;
       const phiLo = model.phiOpt - model.sigPhi * Math.sqrt(A);
       const phiHi = model.phiOpt + model.sigPhi * Math.sqrt(A);
-      const N = 160;
+      const N = 200;
 
       ctx.beginPath();
-      ctx.strokeStyle = eta >= 0.88 ? '#111827' : eta >= 0.80 ? '#4b5563' : '#9ca3af';
-      ctx.lineWidth = eta >= 0.88 ? 1.6 : (eta >= 0.80 ? 1.0 : 0.7);
+      ctx.strokeStyle = eta >= 0.90 ? '#111827' : eta >= 0.80 ? '#4b5563' : '#9ca3af';
+      ctx.lineWidth = eta >= 0.90 ? 1.8 : (eta >= 0.80 ? 1.0 : 0.7);
 
       let started = false;
       for (let i = 0; i <= N; i++) {
@@ -394,7 +397,7 @@ const smithPlugin = {
       if (bestPhi >= xScale.min && bestPhi <= xScale.max && bestPsi >= yScale.min && bestPsi <= yScale.max) {
         const px = xScale.getPixelForValue(bestPhi);
         const py = yScale.getPixelForValue(bestPsi);
-        ctx.fillStyle = eta >= 0.88 ? '#111827' : '#6b7280';
+        ctx.fillStyle = eta >= 0.90 ? '#111827' : '#6b7280';
         ctx.font = 'bold 9px -apple-system, Segoe UI, sans-serif';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'bottom';
@@ -403,7 +406,6 @@ const smithPlugin = {
     });
 
     // --- Линии постоянной реактивности ρ = const (приближённо) ---
-    // ρ ≈ 1 - ψ/(2φ) - ... ; для визуализации: ψ ≈ 2φ(1-ρ) - B/2 * φ²? Упрощённо проведём линии ψ = 2φ(1-ρ)
     const rhoLines = machineType === 'compressor' ? [0.3, 0.5, 0.7] : [0.2, 0.4, 0.6];
     rhoLines.forEach(rho => {
       ctx.beginPath();
@@ -422,7 +424,6 @@ const smithPlugin = {
       }
       ctx.stroke();
       ctx.setLineDash([]);
-      // подпись ρ
       const phiLabel = 0.85;
       const psiLabel = 2 * phiLabel * (1 - rho);
       if (psiLabel >= yScale.min && psiLabel <= yScale.max) {
@@ -463,6 +464,32 @@ const smithPlugin = {
         xScale.getPixelForValue(labelPhi) + 4,
         yScale.getPixelForValue(labelPsi) - 10);
     }
+
+    // --- Маркер максимума КПД (вершина "холма") ---
+    if (opts.showPeak !== false) {
+      const peakPhi = model.phiOpt;
+      const peakPsi = model.psiH(peakPhi);
+      const px = xScale.getPixelForValue(peakPhi);
+      const py = yScale.getPixelForValue(peakPsi);
+      if (px >= ca.left && px <= ca.right && py >= ca.top && py <= ca.bottom) {
+        ctx.beginPath();
+        ctx.strokeStyle = '#111827';
+        ctx.lineWidth = 1.4;
+        ctx.setLineDash([2, 2]);
+        ctx.arc(px, py, 5, 0, 2 * Math.PI);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        const labelText = `η_max = ${model.etaMax.toFixed(2)}`;
+        ctx.font = 'bold 10px -apple-system, Segoe UI, sans-serif';
+        const tw = ctx.measureText(labelText).width;
+        ctx.fillStyle = 'rgba(255,255,255,0.9)';
+        ctx.fillRect(px + 7, py - 8, tw + 4, 16);
+        ctx.fillStyle = '#111827';
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(labelText, px + 9, py);
+      }
+    }
     ctx.restore();
   }
 };
@@ -476,7 +503,13 @@ function trianglesComp(p, r) {
   const W1 = Math.hypot(ca, Math.abs(w1u));
   const W2 = Math.hypot(ca, Math.abs(w2u));
   const aStar = Math.sqrt(2 * p.c_gamma / (p.c_gamma + 1) * r.Rg * p.c_T_inlet);
-  const Mw1 = Math.hypot(ca, r.u_tip) / aStar;
+  // Периферийное сечение (c_u r = const, u ∝ r): r_tip/r_mean = 1.10
+  const r_ratio = 1.10;
+  const c1u_tip = c1u / r_ratio;
+  const u_tip = U * r_ratio;
+  const w1u_tip = c1u_tip - u_tip;
+  const W1_tip = Math.hypot(ca, Math.abs(w1u_tip));
+  const Mw1 = W1_tip / aStar;
   const deg = (x, y) => Math.atan2(y, Math.abs(x)) * 180 / Math.PI;
   return {
     dcu, c1u, c2u, w1u, w2u, W1, W2,
@@ -575,9 +608,13 @@ function computeTurbine(p) {
 }
 
 function computeFan(p, rc) {
-  const G_fan = p.G_total * (1 + p.m_bypass);
+  // Через вентилятор проходит ВЕСЬ расход воздуха: G_fan = G_total
+  const G_fan = p.G_total;
+  const G_core = G_fan / (1 + p.m_bypass);
+  const G_bypass = G_fan - G_core;
+  const rho_fan = p.rho_fan;
   const ca = rc.C_axial;
-  const A = G_fan / (rc.rho_in * ca);
+  const A = G_fan / (rho_fan * ca);
   const d = p.d_fan;
   const D_tip = Math.sqrt(4 * A / (Math.PI * (1 - d * d)));
   const D_hub = d * D_tip;
@@ -585,7 +622,11 @@ function computeFan(p, rc) {
   const rpm = 60 * rc.U / (Math.PI * D_mean);
   const u_tip = Math.PI * D_tip * rpm / 60;
   const sigma = p.c_rho_mat * u_tip * u_tip / 1e6;
-  return { G_fan, ca, A, d, D_tip, D_hub, D_mean, rpm, u_tip, sigma, safety: p.sigma_allow / sigma };
+  return {
+    G_fan, G_core, G_bypass, rho_fan, ca, A, d,
+    D_tip, D_hub, D_mean, rpm, u_tip, sigma,
+    safety: p.sigma_allow / sigma
+  };
 }
 
 // ---------- Поступенчатый расчёт ----------
@@ -664,9 +705,8 @@ function computeRadialSections(p, r, machineType) {
     : Math.sqrt(2 * p.t_gamma / (p.t_gamma + 1) * r.Rg * p.t_T_inlet);
 
   radii.forEach(({ name, factor }) => {
-    const rad = r_mean * (factor / 0.5); // factor: 0.45 → 0.9*r_mean, 0.5 → r_mean, 0.55 → 1.1*r_mean
+    const rad = r_mean * (factor / 0.5);
     const u = U_mean * (rad / r_mean);
-    // c_u r = const
     const c1u = c1uMean * (r_mean / rad);
     const c2u = c2uMean * (r_mean / rad);
     const w1u = c1u - u;
@@ -704,9 +744,9 @@ function renderResults(p, rc, rt) {
     ['Окружная скорость на периферии, м/с', rc.u_tip, rt.u_tip, null, 1],
     ['Центробежное напряжение, МПа', rc.sigma, rt.sigma, null, 1],
     ['Запас по прочности', rc.safety, rt.safety, null, 2],
-    ['Работа одной ступени (с учётом η), кДж/кг', rc.dh_stage / 1000, rt.dh_stage / 1000, null, 2],
-    ['Изоэнтропическая работа, кДж/кг', rc.dh_is / 1000, rt.dh_is / 1000, null, 2],
-    ['η в расчётной точке', rc.eta_at_point, rt.eta_at_point, null, 3]
+    ['Изоэнтропическая работа ступени, кДж/кг', rc.dh_stage / 1000, rt.dh_stage / 1000, null, 2],
+    ['Изоэнтропическая работа узла, кДж/кг', rc.dh_is / 1000, rt.dh_is / 1000, null, 2],
+    ['η в расчётной точке (по модели Смита)', rc.eta_at_point, rt.eta_at_point, null, 3]
   ];
   $('resultsBody').innerHTML = rows.map(([l, cv, tv, proto, dec]) =>
     `<tr><td>${l}</td><td>${fmt(cv, dec)}</td><td>${fmt(tv, dec)}</td><td>${fmt(proto)}</td></tr>`
@@ -716,20 +756,25 @@ function renderResults(p, rc, rt) {
   drawChart('chartTurb', 'turbine', rt, p, p.psi_min_t, p.psi_max_t);
 
   const zone = (eta) => eta > 0.88 ? 'в зоне высокого КПД' : eta > 0.82 ? 'в приемлемой зоне' : 'вне оптимальной зоны';
-  $('infoComp').textContent = `Точка (φ=${fmt(p.c_phi, 2)}, ψ=${fmt(rc.psi_actual, 3)}): η ≈ ${fmt(rc.eta_at_point, 3)} — ${zone(rc.eta_at_point)}.`;
-  $('infoTurb').textContent = `Точка (φ=${fmt(p.t_phi, 2)}, ψ=${fmt(rt.psi_actual, 3)}): η ≈ ${fmt(rt.eta_at_point, 3)} — ${zone(rt.eta_at_point)}.`;
+  $('infoComp').textContent = `Точка (φ=${fmt(p.c_phi, 2)}, ψ=${fmt(rc.psi_actual, 3)}): η ≈ ${fmt(rc.eta_at_point, 3)} — ${zone(rc.eta_at_point)}.  Максимум η_max = ${COMP_MODEL.etaMax.toFixed(2)} — в вершине (φ≈${COMP_MODEL.phiOpt.toFixed(2)}, ψ≈${COMP_MODEL.psiH(COMP_MODEL.phiOpt).toFixed(2)}).`;
+  $('infoTurb').textContent = `Точка (φ=${fmt(p.t_phi, 2)}, ψ=${fmt(rt.psi_actual, 3)}): η ≈ ${fmt(rt.eta_at_point, 3)} — ${zone(rt.eta_at_point)}.  Максимум η_max = ${TURB_MODEL.etaMax.toFixed(2)} — в вершине (φ≈${TURB_MODEL.phiOpt.toFixed(2)}, ψ≈${TURB_MODEL.psiH(TURB_MODEL.phiOpt).toFixed(2)}).`;
 }
 
 function renderFan(p, rf) {
   $('fanBox').innerHTML = `
     <div class="match-box">
       <div class="match-item"><div class="label">Полный расход G_полн</div><div class="value">${fmt(p.G_total, 1)}</div><div class="note">кг/с</div></div>
-      <div class="match-item"><div class="label">Расход через вентилятор G_в</div><div class="value">${fmt(rf.G_fan, 1)}</div><div class="note">кг/с (m = ${fmt(p.m_bypass, 1)})</div></div>
-      <div class="match-item"><div class="label">Диаметр периферии D_пер</div><div class="value">${fmt(rf.D_tip, 2)}</div><div class="note">м (прототип ≈ 1,9)</div></div>
+      <div class="match-item"><div class="label">Расход через вентилятор G_в</div><div class="value">${fmt(rf.G_fan, 1)}</div><div class="note">кг/с = G_полн</div></div>
+      <div class="match-item"><div class="label">Расход через внутр. контур</div><div class="value">${fmt(rf.G_core, 1)}</div><div class="note">кг/с (m = ${fmt(p.m_bypass, 1)})</div></div>
     </div>
     <div class="match-box">
+      <div class="match-item"><div class="label">Диаметр периферии D_пер</div><div class="value">${fmt(rf.D_tip, 2)}</div><div class="note">м (прототип ≈ 1,9)</div></div>
       <div class="match-item"><div class="label">Средний диаметр D_ср</div><div class="value">${fmt(rf.D_mean, 2)}</div><div class="note">м</div></div>
-      <div class="match-item"><div class="label">Обороты n₁</div><div class="value">${fmt(rf.rpm, 0)}</div><div class="note">об/мин</div></div>
+      <div class="match-item"><div class="label">Обороты n₁</div><div class="value">${fmt(rf.rpm, 0)}</div><div class="note">об/мин (прототип ≈ 3654)</div></div>
+    </div>
+    <div class="match-box">
+      <div class="match-item"><div class="label">Плотность на входе ρ_в</div><div class="value">${fmt(rf.rho_fan, 2)}</div><div class="note">кг/м³</div></div>
+      <div class="match-item"><div class="label">u_пер</div><div class="value">${fmt(rf.u_tip, 0)}</div><div class="note">м/с</div></div>
       <div class="match-item"><div class="label">Напряжение σ / запас</div><div class="value">${fmt(rf.sigma, 0)}</div><div class="note">МПа; запас ${fmt(rf.safety, 2)}</div></div>
     </div>`;
 }
@@ -768,7 +813,7 @@ function renderTriangles(rc, rt) {
     ['β₁, °', fmt(t.b1, 1), fmt(g.b1, 1)],
     ['β₂, °', fmt(t.b2, 1), fmt(g.b2, 1)],
     ['Число Де Халлера W₂/W₁', fmt(t.deH, 3), '—'],
-    ['M<sub>w1</sub> на периферии', fmt(t.Mw1, 3), '—']
+    ['M<sub>w1</sub> на периферии (КНД)', fmt(t.Mw1, 3), '—']
   ];
   $('triTable').innerHTML = '<thead><tr><th>Параметр</th><th>Компрессор (КНД)</th><th>Турбина (ТНД)</th></tr></thead>' +
     '<tbody>' + rows.map(r => `<tr><td>${r[0]}</td><td>${r[1]}</td><td>${r[2]}</td></tr>`).join('') + '</tbody>';
@@ -800,56 +845,55 @@ function renderRadialTables(p, rc, rt) {
   $('radialTurbTable').innerHTML = header + '<tbody>' + body(turbSections) + '</tbody>';
 }
 
-// ---------- График sigma_доп(T) ----------
-function drawSigmaChart(p) {
+// ---------- График sigma_доп(T) с расчётными точками ----------
+function drawSigmaChart(p, rc, rt) {
   if (typeof Chart === 'undefined') return;
-  // Ориентировочные данные — ЗАМЕНИТЕ на свои из методички/справочника
   const titanium = [
-    { T: 20, sigma: 800 },
-    { T: 200, sigma: 650 },
-    { T: 300, sigma: 550 },
-    { T: 400, sigma: 420 },
-    { T: 500, sigma: 300 },
-    { T: 600, sigma: 180 }
+    { T: 20, sigma: 800 }, { T: 200, sigma: 650 }, { T: 300, sigma: 550 },
+    { T: 400, sigma: 420 }, { T: 500, sigma: 300 }, { T: 600, sigma: 180 }
   ];
   const nickel = [
-    { T: 20, sigma: 750 },
-    { T: 400, sigma: 680 },
-    { T: 600, sigma: 550 },
-    { T: 700, sigma: 420 },
-    { T: 800, sigma: 250 },
-    { T: 900, sigma: 120 }
+    { T: 20, sigma: 750 }, { T: 400, sigma: 680 }, { T: 600, sigma: 550 },
+    { T: 700, sigma: 420 }, { T: 800, sigma: 250 }, { T: 900, sigma: 120 }
   ];
+  const datasets = [
+    {
+      label: 'Титан ВТ6 (ориентир)',
+      data: titanium.map(d => ({ x: d.T, y: d.sigma })),
+      borderColor: '#00796b', backgroundColor: 'rgba(0,121,107,0.08)',
+      fill: false, tension: 0.3, pointRadius: 3, showLine: true, borderWidth: 2
+    },
+    {
+      label: 'Жаропрочный никелевый сплав (ориентир)',
+      data: nickel.map(d => ({ x: d.T, y: d.sigma })),
+      borderColor: '#b91c1c', backgroundColor: 'rgba(185,28,28,0.08)',
+      fill: false, tension: 0.3, pointRadius: 3, showLine: true, borderWidth: 2
+    }
+  ];
+  if (rc && Number.isFinite(p.T_metal_c) && Number.isFinite(rc.sigma)) {
+    datasets.push({
+      label: `Расчётная точка КНД (T=${p.T_metal_c}°C, σ=${fmt(rc.sigma, 0)} МПа)`,
+      data: [{ x: p.T_metal_c, y: rc.sigma }],
+      backgroundColor: '#00796b', borderColor: '#ffffff', borderWidth: 2,
+      pointRadius: 9, pointHoverRadius: 12, pointStyle: 'rectRot', showLine: false
+    });
+  }
+  if (rt && Number.isFinite(p.T_metal_t) && Number.isFinite(rt.sigma)) {
+    datasets.push({
+      label: `Расчётная точка ТНД (T=${p.T_metal_t}°C, σ=${fmt(rt.sigma, 0)} МПа)`,
+      data: [{ x: p.T_metal_t, y: rt.sigma }],
+      backgroundColor: '#b91c1c', borderColor: '#ffffff', borderWidth: 2,
+      pointRadius: 9, pointHoverRadius: 12, pointStyle: 'rectRot', showLine: false
+    });
+  }
+
   const existing = Chart.getChart($('chartSigma'));
   if (existing) existing.destroy();
   new Chart($('chartSigma'), {
-    type: 'line',
-    data: {
-      datasets: [
-        {
-          label: 'Титан ВТ6 (ориентир)',
-          data: titanium.map(d => ({ x: d.T, y: d.sigma })),
-          borderColor: '#00796b',
-          backgroundColor: 'rgba(0,121,107,0.08)',
-          fill: false,
-          tension: 0.3,
-          pointRadius: 3
-        },
-        {
-          label: 'Жаропрочный никелевый сплав (ориентир)',
-          data: nickel.map(d => ({ x: d.T, y: d.sigma })),
-          borderColor: '#b91c1c',
-          backgroundColor: 'rgba(185,28,28,0.08)',
-          fill: false,
-          tension: 0.3,
-          pointRadius: 3
-        }
-      ]
-    },
+    type: 'scatter',
+    data: { datasets },
     options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      animation: false,
+      responsive: true, maintainAspectRatio: false, animation: false,
       plugins: {
         legend: { position: 'bottom' },
         tooltip: {
@@ -860,7 +904,7 @@ function drawSigmaChart(p) {
       },
       scales: {
         x: { type: 'linear', title: { display: true, text: 'Температура металла, °C' }, min: 0, max: 950 },
-        y: { title: { display: true, text: 'Допустимое напряжение σ, МПа' }, min: 0, max: 900 }
+        y: { title: { display: true, text: 'Напряжение σ, МПа' }, min: 0, max: 900 }
       }
     }
   });
@@ -1011,17 +1055,19 @@ function renderStepsTurb(p, r) {
 
 function renderStepsFan(p, rf, rc) {
   const steps = [];
-  steps.push(step('1. Полный расход через вентилятор', 'G<sub>в</sub> = G<sub>полн</sub> · (1 + m)',
-    `G<sub>в</sub> = ${fmt(p.G_total, 1)} · (1 + ${fmt(p.m_bypass, 2)})`, `G<sub>в</sub> = ${fmt(rf.G_fan, 1)} кг/с`));
-  steps.push(step('2. Площадь проходного сечения', 'A = G<sub>в</sub> / (ρ · C<sub>ax</sub>)',
-    `A = ${fmt(rf.G_fan, 1)} / (${fmt(rc.rho_in, 3)} · ${fmt(rf.ca, 1)})`, `A = ${fmt(rf.A, 4)} м²`));
-  steps.push(step('3. Диаметр периферии', 'D<sub>пер</sub> = √( 4A / (π · (1 − d²)) )',
+  steps.push(step('1. Расход через вентилятор (весь расход идёт через вентилятор)', 'G<sub>в</sub> = G<sub>полн</sub>',
+    `G<sub>в</sub> = ${fmt(p.G_total, 1)} кг/с`, `G<sub>в</sub> = ${fmt(rf.G_fan, 1)} кг/с`));
+  steps.push(step('2. Расход через внутренний контур', 'G<sub>внутр</sub> = G<sub>полн</sub> / (1 + m)',
+    `G<sub>внутр</sub> = ${fmt(p.G_total, 1)} / (1 + ${fmt(p.m_bypass, 2)})`, `G<sub>внутр</sub> = ${fmt(rf.G_core, 1)} кг/с`));
+  steps.push(step('3. Площадь проходного сечения вентилятора', 'A = G<sub>в</sub> / (ρ<sub>в</sub> · C<sub>ax</sub>)',
+    `A = ${fmt(rf.G_fan, 1)} / (${fmt(rf.rho_fan, 2)} · ${fmt(rf.ca, 1)})`, `A = ${fmt(rf.A, 4)} м²`));
+  steps.push(step('4. Диаметр периферии', 'D<sub>пер</sub> = √( 4A / (π · (1 − d²)) )',
     `D<sub>пер</sub> = √( 4 · ${fmt(rf.A, 4)} / (3.1416 · (1 − ${fmt(p.d_fan, 2)}²)) )`, `D<sub>пер</sub> = ${fmt(rf.D_tip, 3)} м`));
-  steps.push(step('4. Диаметры втулки и средний', 'D<sub>вт</sub> = d · D<sub>пер</sub>;  D<sub>ср</sub> = D<sub>пер</sub> · (1 + d) / 2',
+  steps.push(step('5. Диаметры втулки и средний', 'D<sub>вт</sub> = d · D<sub>пер</sub>;  D<sub>ср</sub> = D<sub>пер</sub> · (1 + d) / 2',
     `D<sub>вт</sub> = ${fmt(rf.D_hub, 3)} м;  D<sub>ср</sub> = ${fmt(rf.D_mean, 3)} м`, '—'));
-  steps.push(step('5. Обороты вентилятора (ротор НД)', 'n₁ = 60 · U / (π · D<sub>ср</sub>)',
+  steps.push(step('6. Обороты вентилятора (ротор НД)', 'n₁ = 60 · U / (π · D<sub>ср</sub>)',
     `n₁ = 60 · ${fmt(rc.U, 1)} / (3.1416 · ${fmt(rf.D_mean, 3)})`, `n₁ = ${fmt(rf.rpm, 0)} об/мин`));
-  steps.push(step('6. Периферийная скорость и прочность', 'u<sub>пер</sub> = π · D<sub>пер</sub> · n₁ / 60;  σ ≈ ρ<sub>мат</sub> · u<sub>пер</sub>²',
+  steps.push(step('7. Периферийная скорость и прочность', 'u<sub>пер</sub> = π · D<sub>пер</sub> · n₁ / 60;  σ ≈ ρ<sub>мат</sub> · u<sub>пер</sub>²',
     `u<sub>пер</sub> = ${fmt(rf.u_tip, 1)} м/с;  ρ<sub>мат</sub> = ${fmt(p.c_rho_mat, 0)} кг/м³`, `σ = ${fmt(rf.sigma, 0)} МПа; запас = ${fmt(rf.safety, 2)}`));
   $('stepsFan').innerHTML = steps.join('');
 }
@@ -1083,7 +1129,7 @@ function drawChart(canvasId, machineType, res, p, psiMin, psiMax) {
             }
           }
         },
-        smithChart: { machineType, parabolas }
+        smithChart: { machineType, parabolas, showPeak: true }
       },
       scales: {
         x: {
@@ -1119,6 +1165,7 @@ function validate(p) {
   for (const k of KEYS) if (!Number.isFinite(p[k])) throw new Error('Введите число: ' + LABEL[k]);
   if (p.c_mass_flow <= 0) throw new Error('Расход компрессора должен быть > 0');
   if (p.G_total <= 0) throw new Error('Полный расход через двигатель должен быть > 0');
+  if (p.rho_fan <= 0) throw new Error('Плотность воздуха на входе в вентилятор должна быть > 0');
   if (p.c_T_inlet <= 0) throw new Error('Температура на входе компрессора должна быть > 0');
   if (p.t_T_inlet <= 0) throw new Error('Температура на входе турбины должна быть > 0');
   if (p.c_P_inlet <= 0) throw new Error('Давление на входе компрессора должно быть > 0');
@@ -1172,7 +1219,7 @@ function calculate() {
     $('stageTurbTable').innerHTML = stageTable(st);
     drawMeridional('chartMerComp', sc);
     drawMeridional('chartMerTurb', st);
-    drawSigmaChart(p);
+    drawSigmaChart(p, rc, rt);
     renderStepsComp(p, rc);
     renderStepsTurb(p, rt);
     renderStepsFan(p, rf, rc);
@@ -1193,23 +1240,23 @@ function matchCompressorRpm() {
       $('autoU').checked = false;
       $('c_U').disabled = false;
       $('t_U').disabled = false;
-      $('c_U').value = rc0.U.toFixed(1);
+      $('c_U').value = rc0.U.toFixed(2);
       p = inputs();
     }
     const rt = computeTurbine(p);
-    for (let i = 0; i < 30; i++) {
+    for (let i = 0; i < 50; i++) {
       const rc = computeCompressor(p);
-      if (Math.abs(rc.rpm - rt.rpm) / rt.rpm < 0.0005) break;
+      if (Math.abs(rc.rpm - rt.rpm) / rt.rpm < 0.0002) break;
       p.c_U *= Math.pow(rt.rpm / rc.rpm, 2 / 3);
     }
-    $('c_U').value = p.c_U.toFixed(1);
+    $('c_U').value = p.c_U.toFixed(2);
     $('status').textContent = 'Окружная скорость КНД подобрана по оборотам ТНД.';
     calculate();
   } catch (e) { message(e.message); }
 }
 
 // ---------- Сохранение / загрузка / экспорт ----------
-const LS_KEY = 'pd14_inputs_v3';
+const LS_KEY = 'pd14_inputs_v4';
 
 function saveState() {
   try {
@@ -1247,9 +1294,11 @@ function exportCsv() {
   rows.push(['Окружная скорость на периферии, м/с', d.rc.u_tip.toFixed(1), d.rt.u_tip.toFixed(1)]);
   rows.push(['Напряжение, МПа', d.rc.sigma.toFixed(1), d.rt.sigma.toFixed(1)]);
   rows.push([]);
-  rows.push(['Вентилятор (полный расход)']);
+  rows.push(['Вентилятор']);
   rows.push(['Полный расход, кг/с', d.p.G_total.toFixed(1)]);
   rows.push(['G вентилятора, кг/с', d.rf.G_fan.toFixed(1)]);
+  rows.push(['G внутр. контура, кг/с', d.rf.G_core.toFixed(1)]);
+  rows.push(['Плотность на входе, кг/м³', d.rf.rho_fan.toFixed(2)]);
   rows.push(['D пер, м', d.rf.D_tip.toFixed(3)]);
   rows.push(['D ср, м', d.rf.D_mean.toFixed(3)]);
   rows.push(['Обороты n1, об/мин', d.rf.rpm.toFixed(0)]);
@@ -1268,8 +1317,11 @@ function exportCsv() {
   rows.push(['Число Де Халлера', d.rc.tri.deH.toFixed(3), '—']);
   rows.push(['M w1 на периферии', d.rc.tri.Mw1.toFixed(3), '—']);
   rows.push([]);
-  rows.push(['Ступень', 'D ср, м', 'D вт, м', 'D пер, м', 'h, м', 'Δh (с η), кДж/кг', 'Δh_из, кДж/кг', 'ψ', 'η']);
+  rows.push(['Ступень (КНД)', 'D ср, м', 'D вт, м', 'D пер, м', 'h, м', 'Δh (с η), кДж/кг', 'Δh_из, кДж/кг', 'ψ', 'η']);
   d.sc.forEach(s => rows.push([s.i, s.D.toFixed(3), s.D_hub.toFixed(3), s.D_tip.toFixed(3), s.h.toFixed(3), (s.dh / 1000).toFixed(2), (s.dh_is / 1000).toFixed(2), s.psi.toFixed(3), s.eta.toFixed(3)]));
+  rows.push([]);
+  rows.push(['Ступень (ТНД)', 'D ср, м', 'D вт, м', 'D пер, м', 'h, м', 'Δh (с η), кДж/кг', 'Δh_из, кДж/кг', 'ψ', 'η']);
+  d.st.forEach(s => rows.push([s.i, s.D.toFixed(3), s.D_hub.toFixed(3), s.D_tip.toFixed(3), s.h.toFixed(3), (s.dh / 1000).toFixed(2), (s.dh_is / 1000).toFixed(2), s.psi.toFixed(3), s.eta.toFixed(3)]));
   const csv = rows.map(r => r.join(';')).join('\n');
   const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
   const a = document.createElement('a');
